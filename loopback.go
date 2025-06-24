@@ -3,6 +3,8 @@ package loopback
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"unsafe"
 
@@ -19,8 +21,49 @@ func errnoIsErr(err error) error {
 	return nil
 }
 
+// isImageInUse checks if the given image file is already attached to a loop device
+func isImageInUse(imagePath string) (bool, error) {
+	// Get absolute path to properly compare with the backing files
+	absImagePath, err := filepath.Abs(imagePath)
+	if err != nil {
+		return false, fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	// Check /sys/block/loop* directories to find backing files
+	loopDirs, err := filepath.Glob("/sys/block/loop*")
+	if err != nil {
+		return false, fmt.Errorf("failed to list loop devices: %w", err)
+	}
+
+	for _, loopDir := range loopDirs {
+		backingFilePath := filepath.Join(loopDir, "loop", "backing_file")
+
+		// Read the backing file path if it exists
+		backingFile, err := os.ReadFile(backingFilePath)
+		if err == nil {
+			// Trim null bytes and newlines
+			backingFileTrimmed := strings.TrimSpace(strings.TrimRight(string(backingFile), "\x00"))
+
+			// Compare with our image path
+			if backingFileTrimmed == absImagePath {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
 // Loop will set up a /dev/loopX device linked to the image file by using syscalls directly to set it
 func Loop(img string, rw bool, log Logger) (loopDevice string, err error) {
+	// Check if image is already in use
+	inUse, err := isImageInUse(img)
+	if err != nil {
+		log.Printf("Warning: Failed to check if image is in use: %v", err)
+	} else if inUse {
+		return "", fmt.Errorf("image file %s is already in use by another loop device", img)
+	}
+
 	log.Printf("Opening loop control device")
 	fd, err := os.OpenFile("/dev/loop-control", os.O_RDONLY, 0o644)
 	if err != nil {

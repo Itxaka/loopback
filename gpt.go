@@ -1,6 +1,7 @@
 package loopback
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -27,9 +28,21 @@ func GetGPTPartitions(devicePath string) ([]Partition, error) {
 		return nil, fmt.Errorf("reading GPT header: %w", err)
 	}
 
+	// Check for valid GPT signature "EFI PART"
+	expectedSignature := []byte{'E', 'F', 'I', ' ', 'P', 'A', 'R', 'T'}
+	if !bytes.Equal(hdrBuf[:8], expectedSignature) {
+		return nil, fmt.Errorf("invalid or missing GPT signature, not a GPT disk or blank image")
+	}
+
 	partitionEntryLBA := binary.LittleEndian.Uint64(hdrBuf[72:80])
 	numPartitionEntries := binary.LittleEndian.Uint32(hdrBuf[80:84])
 	sizeOfPartitionEntry := binary.LittleEndian.Uint32(hdrBuf[84:88])
+
+	// Validate that the values are reasonable
+	if partitionEntryLBA == 0 || numPartitionEntries == 0 || sizeOfPartitionEntry == 0 {
+		return nil, fmt.Errorf("invalid GPT header values: partitionEntryLBA=%d, numPartitionEntries=%d, sizeOfPartitionEntry=%d",
+			partitionEntryLBA, numPartitionEntries, sizeOfPartitionEntry)
+	}
 
 	partitions := []Partition{}
 	entryBuf := make([]byte, sizeOfPartitionEntry)
