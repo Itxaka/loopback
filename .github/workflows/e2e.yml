@@ -21,7 +21,7 @@ jobs:
           go-version-file: "go.mod"
 
       - name: Install test dependencies
-        run: sudo apt-get update && sudo apt-get install -y gdisk kpartx
+        run: sudo apt-get update && sudo apt-get install -y gdisk libdevmapper-dev
 
       - name: Run E2E tests as root
         run: sudo -E go test -v -tags=e2e .
