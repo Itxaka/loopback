@@ -1,0 +1,28 @@
+name: Loopback E2E Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+
+      - name: Install test dependencies
+        run: sudo apt-get update && sudo apt-get install -y gdisk kpartx
+
+      - name: Run E2E tests as root
+        run: sudo -E go test -v -tags=e2e .
+
